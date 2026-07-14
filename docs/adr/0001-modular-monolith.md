@@ -1,28 +1,29 @@
-# ADR 0001: Модульный монолит
+# ADR 0001: Modular monolith
 
-- Статус: принято
-- Дата: 2026-07-14
+- Status: accepted
+- Date: 2026-07-14
 
-## Контекст
+## Context
 
-MyCRM начинается как персональный продукт, но должна поддерживать сложную
-бизнес-логику, фоновые процессы и управляемые ИИ-функции. Микросервисы на этом
-этапе увеличат стоимость разработки и эксплуатации без подтверждённой пользы.
+MyCRM starts as a personal product, but it must support complex business logic,
+background processes, and controlled AI capabilities. Microservices at this
+stage would increase development and operational costs without proven value.
 
-## Решение
+## Decision
 
-Backend реализуется как один FastAPI-сервис с PostgreSQL, разделённый на
-доменные модули. HTTP-слой, прикладные сценарии, доменные правила и
-инфраструктура не смешиваются. Модули взаимодействуют через публичные
-application-интерфейсы и доменные события.
+The backend is implemented as a single FastAPI service backed by PostgreSQL and
+divided into domain modules. The HTTP layer, application use cases, domain
+rules, and infrastructure are kept separate. Modules communicate through public
+application interfaces and domain events.
 
-Frontend реализуется отдельным React-приложением. OpenAPI FastAPI станет
-источником контракта для будущей генерации TypeScript-клиента.
+The frontend is implemented as a separate React application. FastAPI's OpenAPI
+schema will become the source contract for future TypeScript client generation.
 
-## Последствия
+## Consequences
 
-- Один сервис проще запускать, тестировать и развёртывать.
-- Транзакции CRM остаются простыми и надёжными.
-- Границы модулей нужно соблюдать ревью и тестами, а не сетевыми вызовами.
-- Отдельный модуль можно вынести в сервис позднее, если появится измеримая
-  потребность в независимом масштабировании или отказоустойчивости.
+- A single service is easier to start, test, and deploy.
+- CRM transactions remain simple and reliable.
+- Module boundaries must be enforced through reviews and tests rather than
+  network calls.
+- A module can be extracted into a separate service later if there is a measured
+  need for independent scaling or fault isolation.

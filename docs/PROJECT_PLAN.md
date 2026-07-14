@@ -1,83 +1,83 @@
-# План MyCRM
+# MyCRM Project Plan
 
-## 1. Видение продукта
+## 1. Product vision
 
-MyCRM — персональная CRM, в которой ИИ не является отдельным чат-ботом, а
-помогает внутри обычных процессов: разбирает входящие сообщения, обогащает
-карточки, предлагает следующие действия, готовит ответы, ищет риски и объясняет
-свои рекомендации.
+MyCRM is a personal CRM in which AI is not a separate chatbot. Instead, it
+assists inside ordinary workflows: it interprets incoming messages, enriches
+records, suggests next actions, drafts replies, identifies risks, and explains
+its recommendations.
 
-Главный принцип: обычная бизнес-логика остаётся детерминированной, проверяемой и
-имеет приоритет над ИИ. Модель предлагает или подготавливает изменения, а
-критичные действия выполняются только после проверки правил и, при
-необходимости, подтверждения пользователя.
+The primary principle is that conventional business logic remains
+deterministic, testable, and authoritative. The model proposes or prepares
+changes, while critical actions are executed only after rule validation and,
+when necessary, explicit user confirmation.
 
-## 2. Цели первой версии
+## 2. First-version goals
 
-Первая полезная версия должна позволять:
+The first useful version should make it possible to:
 
-1. Вести контакты, компании, сделки, задачи, заметки и активности.
-2. Видеть историю взаимодействия с человеком или компанией в одном месте.
-3. Управлять сделками через настраиваемую воронку.
-4. Быстро находить записи обычным и смысловым поиском.
-5. Получать ИИ-сводку по клиенту или сделке.
-6. Получать предложение следующего действия с объяснением.
-7. Превращать свободный текст в черновик структурированной записи CRM.
-8. Контролировать все изменения через журнал событий и подтверждение опасных
-   действий.
+1. Manage contacts, companies, deals, tasks, notes, and activities.
+2. See the complete interaction history for a person or company in one place.
+3. Move deals through a configurable pipeline.
+4. Find records using both conventional and semantic search.
+5. Generate an AI summary of a client or deal.
+6. Receive a suggested next action together with an explanation.
+7. Convert free-form text into a draft structured CRM record.
+8. Control every change through an event log and confirmation of dangerous
+   actions.
 
-Не включать в первую версию: сложный конструктор автоматизаций, несколько
-организаций, мобильное приложение, микросервисы, собственное обучение моделей и
-полностью автономного агента.
+The first version should not include a complex automation builder,
+multi-organization support, a mobile application, microservices, custom model
+training, or a fully autonomous agent.
 
-## 3. Рекомендуемый стек
+## 3. Recommended stack
 
 ### Backend
 
 - Python 3.12+.
-- FastAPI для HTTP API, зависимостей, валидации и OpenAPI.
-- Pydantic Settings для конфигурации и секретов окружения.
-- SQLAlchemy 2.x с async-драйвером PostgreSQL.
-- Alembic для миграций схемы.
-- PostgreSQL как единственный основной источник истины.
-- pgvector для embeddings и смыслового поиска; начать с точного поиска и
-  добавлять HNSW только после измерений.
-- Redis для короткоживущего кэша, блокировок, rate limiting и очереди задач.
-- Celery как понятный стартовый вариант для фоновых задач; для длинных,
-  многошаговых и восстанавливаемых процессов позднее рассмотреть Temporal.
-- S3-совместимое хранилище для вложений.
+- FastAPI for the HTTP API, dependency injection, validation, and OpenAPI.
+- Pydantic Settings for configuration and environment secrets.
+- SQLAlchemy 2.x with an asynchronous PostgreSQL driver.
+- Alembic for schema migrations.
+- PostgreSQL as the single primary source of truth.
+- pgvector for embeddings and semantic search; begin with exact search and add
+  HNSW only after measuring the need.
+- Redis for short-lived caching, locks, rate limiting, and task queues.
+- Celery as a straightforward initial background-task solution; consider
+  Temporal later for long, multi-step, recoverable workflows.
+- S3-compatible storage for attachments.
 
 ### Frontend
 
-- React/Next.js с TypeScript либо другой знакомый TypeScript-фреймворк.
-- Генерируемый из OpenAPI типизированный API-клиент.
-- Серверное состояние через TanStack Query; локальное UI-состояние не смешивать
-  с данными CRM.
+- React with TypeScript.
+- A typed API client generated from OpenAPI.
+- TanStack Query for server state; do not mix local UI state with CRM data.
 
-### Инженерная инфраструктура
+### Engineering infrastructure
 
-- uv для зависимостей и виртуального окружения.
-- Ruff для форматирования и статических проверок.
-- mypy или pyright для типов.
-- pytest, pytest-asyncio и Testcontainers для тестов с настоящим PostgreSQL.
-- Docker Compose для локальных PostgreSQL, Redis и объектного хранилища.
-- GitHub Actions для проверок, миграций на тестовой БД и сборки контейнера.
-- OpenTelemetry, структурированные JSON-логи и Sentry для наблюдаемости.
+- uv for dependencies and the Python virtual environment.
+- Ruff for formatting and static checks.
+- mypy or pyright for type checking.
+- pytest, pytest-asyncio, and Testcontainers for tests against real PostgreSQL.
+- Docker Compose for local PostgreSQL, Redis, and object storage.
+- GitHub Actions for checks, migrations against a test database, and container
+  image builds.
+- OpenTelemetry, structured JSON logs, and Sentry for observability.
 
-## 4. Архитектура: модульный монолит
+## 4. Architecture: modular monolith
 
-На старте использовать один deployable backend, но разделить его на независимые
-доменные модули. Это проще в разработке и эксплуатации, не мешая позднее вынести
-нагруженные части.
+Start with a single deployable backend, while dividing it into independent
+domain modules. This is simpler to develop and operate and does not prevent
+high-load components from being extracted later.
 
-Предлагаемая структура:
+Proposed structure:
 
 ```text
 src/mycrm/
   main.py
-  core/                 # config, security, db, logging, errors
+  core/                 # configuration, security, database, logging, errors
   modules/
-    identity/           # пользователь, сессии, API keys
+    identity/           # user, sessions, API keys
     contacts/
     companies/
     deals/
@@ -85,12 +85,12 @@ src/mycrm/
     tasks/
     activities/
     notes/
-    communications/     # email/calendar/import adapters
+    communications/     # email, calendar, and import adapters
     search/
     automations/
     ai/
-  shared/               # общие примитивы, не бизнес-модули
-  workers/              # фоновые задания
+  shared/               # shared primitives, not business modules
+  workers/              # background jobs
 tests/
   unit/
   integration/
@@ -98,96 +98,99 @@ tests/
   e2e/
 ```
 
-Внутри каждого модуля разделять:
+Inside each module, separate:
 
-- `api` — HTTP-схемы и маршруты;
-- `application` — сценарии использования и транзакции;
-- `domain` — сущности, правила, события и интерфейсы;
-- `infrastructure` — SQLAlchemy, внешние API и конкретные реализации.
+- `api` — HTTP schemas and routes;
+- `application` — use cases and transaction boundaries;
+- `domain` — entities, rules, events, and interfaces;
+- `infrastructure` — SQLAlchemy, external APIs, and concrete implementations.
 
-Маршрут FastAPI не должен содержать бизнес-логику. Он валидирует запрос,
-вызывает application-сценарий и преобразует результат в HTTP-ответ.
+A FastAPI route must not contain business logic. It validates the request,
+invokes an application use case, and converts the result into an HTTP response.
 
-## 5. Базовая модель данных
+## 5. Base data model
 
-Минимальные сущности:
+Minimum entities:
 
-- `users` — владелец CRM и настройки;
-- `contacts` — люди, контакты, теги, источник и ответственный;
-- `companies` — организации и связи с контактами;
-- `pipelines`, `pipeline_stages` — настраиваемые воронки;
-- `deals` — сумма, валюта, вероятность, стадия, ожидаемая дата закрытия;
-- `tasks` — срок, приоритет, статус и связь с любой сущностью;
-- `activities` — звонок, встреча, письмо, изменение стадии и другие события;
-- `notes` — заметки с исходным и нормализованным текстом;
-- `messages`, `threads` — импортированные коммуникации;
-- `attachments` — метаданные файла, сам файл хранится отдельно;
-- `tags` и таблицы связей;
-- `custom_field_definitions`, `custom_field_values` — только когда появится
-  реальная потребность;
-- `audit_log` — кто, когда и что изменил, включая источник `human`, `rule`, `ai`;
-- `outbox_events` — надёжная отправка доменных событий после транзакции;
-- `ai_runs` — запрос, модель, версия промпта, входные ссылки, результат,
-  стоимость, задержка и статус проверки;
-- `ai_suggestions` — предложение, уверенность, объяснение, статус
-  `pending/accepted/rejected/expired`;
-- `knowledge_documents`, `knowledge_chunks`, `embeddings` — база знаний и RAG.
+- `users` — CRM owner and preferences;
+- `contacts` — people, contact details, tags, source, and owner;
+- `companies` — organizations and their relationships to contacts;
+- `pipelines`, `pipeline_stages` — configurable pipelines;
+- `deals` — amount, currency, probability, stage, and expected closing date;
+- `tasks` — due date, priority, status, and relationship to any entity;
+- `activities` — calls, meetings, emails, stage changes, and other events;
+- `notes` — notes with original and normalized text;
+- `messages`, `threads` — imported communications;
+- `attachments` — file metadata, with content stored separately;
+- `tags` and relationship tables;
+- `custom_field_definitions`, `custom_field_values` — only when a real need
+  appears;
+- `audit_log` — who changed what and when, including `human`, `rule`, or `ai`
+  as the source;
+- `outbox_events` — reliable domain-event delivery after a transaction;
+- `ai_runs` — request, model, prompt version, input references, result, cost,
+  latency, and review status;
+- `ai_suggestions` — suggestion, confidence, explanation, and
+  `pending/accepted/rejected/expired` status;
+- `knowledge_documents`, `knowledge_chunks`, `embeddings` — knowledge base and
+  RAG.
 
-Сразу использовать UUID, UTC в базе, optimistic locking (`version`) для
-изменяемых сущностей и soft delete только там, где действительно нужно
-восстановление. Денежные значения хранить как decimal плюс код валюты, не float.
+Use UUIDs and UTC timestamps from the beginning. Apply optimistic locking with a
+`version` field to mutable entities and use soft deletion only where recovery is
+actually required. Store monetary values as decimal plus a currency code, never
+as floating-point numbers.
 
-## 6. ИИ как отдельная подсистема
+## 6. AI as a separate subsystem
 
-ИИ-слой не должен напрямую выполнять SQL или произвольные действия. Он получает
-ограниченный контекст и вызывает небольшой набор типизированных инструментов
-уровня приложения.
+The AI layer must not execute SQL or arbitrary actions directly. It receives
+limited context and can call a small set of typed application-level tools.
 
-### Полезные ИИ-возможности по приоритету
+### AI capabilities by priority
 
-#### Уровень 1 — низкий риск, высокая польза
+#### Level 1 — low risk, high value
 
-- краткая сводка карточки контакта, компании или сделки;
-- извлечение контактов, дат, сумм, намерений и задач из текста;
-- классификация входящих сообщений и определение срочности;
-- смысловой и гибридный поиск по заметкам и коммуникациям;
-- черновики писем и заметок с обязательным подтверждением;
-- дедупликация контактов как предложение, а не автоматическое слияние.
+- concise summary of a contact, company, or deal;
+- extraction of contacts, dates, amounts, intentions, and tasks from text;
+- incoming-message classification and urgency detection;
+- semantic and hybrid search across notes and communications;
+- email and note drafts that require confirmation;
+- contact deduplication as a suggestion rather than automatic merging.
 
-#### Уровень 2 — помощь в принятии решений
+#### Level 2 — decision support
 
-- предложение следующего лучшего действия;
-- оценка риска зависшей сделки по явным признакам;
-- автоматическое резюме встречи и создание черновиков задач;
-- утренний обзор: просрочки, сделки без активности, важные ответы;
-- выявление противоречий и отсутствующих данных в карточках.
+- recommended next-best action;
+- assessment of stalled-deal risk using explicit signals;
+- automatic meeting summary and draft task creation;
+- morning briefing with overdue tasks, inactive deals, and important replies;
+- detection of contradictions and missing data in records.
 
-#### Уровень 3 — управляемые агенты
+#### Level 3 — controlled agents
 
-- подготовка последовательности действий по цели пользователя;
-- выполнение обратимых операций через инструменты;
-- пауза перед отправкой письма, удалением, слиянием, изменением денег или стадии;
-- возобновление процесса после подтверждения и повторов внешнего API.
+- preparation of action sequences for a user goal;
+- execution of reversible operations through tools;
+- mandatory pause before sending email, deleting, merging, changing amounts, or
+  moving a deal to another stage;
+- workflow resumption after approval and external API retries.
 
-### Контракт ИИ-функции
+### Contract for every AI capability
 
-У каждой функции должны быть:
+Every capability must define:
 
-- точная задача и JSON-схема результата;
-- допустимые источники контекста;
-- минимально необходимые данные, включая правила маскирования PII;
-- версия промпта и модели;
-- timeout, retry и ограничение стоимости;
-- уровень риска и политика подтверждения;
-- fallback без ИИ;
-- набор тестовых примеров и измеримая метрика качества.
+- an exact task and JSON result schema;
+- allowed context sources;
+- the minimum required data and PII-masking rules;
+- prompt and model version;
+- timeout, retry policy, and cost limit;
+- risk level and confirmation policy;
+- a fallback path that does not require AI;
+- test cases and a measurable quality metric.
 
-Не позволять модели самой решать, какие записи ей доступны. Авторизация и
-фильтрация контекста происходят до вызова модели.
+The model must never decide which records it is allowed to access. Authorization
+and context filtering happen before the model call.
 
-## 7. Поток событий и автоматизации
+## 7. Event flow and automations
 
-Все значимые изменения порождают доменное событие, например:
+Every significant change produces a domain event, for example:
 
 ```text
 DealStageChanged -> outbox -> worker -> recalculate score
@@ -195,185 +198,192 @@ DealStageChanged -> outbox -> worker -> recalculate score
                                |-------> schedule follow-up reminder
 ```
 
-Синхронно выполняются только обязательные инварианты и сохранение данных.
-Embeddings, сводки, внешние интеграции и уведомления выполняются в фоне.
+Only mandatory invariants and data persistence happen synchronously. Embeddings,
+summaries, external integrations, and notifications run in the background.
 
-Каждый обработчик должен быть идемпотентным: повторная доставка события не
-создаёт вторую задачу, письмо или списание. Для внешних действий хранить
-idempotency key и статус выполнения.
+Every handler must be idempotent: repeated event delivery must not create a
+second task, email, or charge. External actions store an idempotency key and
+execution status.
 
-## 8. API-правила
+## 8. API rules
 
-- Версионировать публичный путь: `/api/v1`.
-- Использовать ресурсные маршруты и отдельные endpoints для команд, если команда
-  выражает бизнес-действие, например `/deals/{id}/move-stage`.
-- Cursor pagination для растущих журналов и списков активностей.
-- Единый формат ошибок с машинным `code`, сообщением и `request_id`.
-- Idempotency key для создания и внешних действий.
-- ETag/version check для защиты от потерянных обновлений.
-- Фильтрация и сортировка только по разрешённым полям.
-- WebSocket или Server-Sent Events добавлять лишь для реально нужных обновлений;
-  сначала достаточно polling.
-- OpenAPI является контрактом; изменения проверяются contract-тестами.
+- Version the public path as `/api/v1`.
+- Use resource-oriented routes and dedicated command endpoints when a command
+  represents a business action, for example `/deals/{id}/move-stage`.
+- Use cursor pagination for growing logs and activity lists.
+- Return a common error shape with a machine-readable `code`, message, and
+  `request_id`.
+- Accept an idempotency key for creation and external actions.
+- Use ETag or version checks to prevent lost updates.
+- Allow filtering and sorting only by explicitly permitted fields.
+- Add WebSocket or Server-Sent Events only for proven real-time needs; polling
+  is sufficient initially.
+- Treat OpenAPI as the contract and verify changes with contract tests.
 
-## 9. Безопасность и приватность
+## 9. Security and privacy
 
-Даже персональная CRM содержит чувствительные данные. Обязательный минимум:
+Even a personal CRM contains sensitive information. The minimum requirements
+are:
 
-- хеширование пароля Argon2id либо вход через доверенного OAuth/OIDC-провайдера;
-- короткоживущий access token и безопасная ротация refresh token;
-- шифрование транспорта и резервных копий;
-- секреты только в secret manager или переменных окружения;
-- проверка прав в application-слое, а не только в маршрутах;
-- rate limits для входа, импорта и ИИ-endpoints;
-- аудит просмотра и изменения чувствительных сущностей;
-- защита от prompt injection: внешний текст всегда считается данными, а не
-  инструкцией;
-- allowlist инструментов и аргументов агента;
-- возможность удалить данные пользователя и связанные embeddings;
-- настройка, какие типы данных разрешено отправлять конкретному AI-провайдеру;
-- регулярные резервные копии и проверяемое восстановление.
+- Argon2id password hashing or authentication through a trusted OAuth/OIDC
+  provider;
+- short-lived access tokens and secure refresh-token rotation;
+- encrypted transport and backups;
+- secrets stored only in a secret manager or environment variables;
+- authorization checks in the application layer, not only in routes;
+- rate limits for login, import, and AI endpoints;
+- auditing of access to and changes of sensitive entities;
+- prompt-injection protection: external text is always treated as data, never
+  as instructions;
+- an allowlist of agent tools and arguments;
+- the ability to delete user data and associated embeddings;
+- configuration of which data types may be sent to each AI provider;
+- regular backups and tested restoration.
 
-## 10. Тестирование ИИ и обычной логики
+## 10. Testing AI and conventional logic
 
-Разделить проверки:
+Separate the following types of checks:
 
-- unit-тесты доменных правил без базы и модели;
-- integration-тесты репозиториев, транзакций, outbox и PostgreSQL;
-- API contract-тесты;
-- тесты миграций вверх и назад, если rollback поддерживается;
-- golden dataset для ИИ: реальные, но обезличенные примеры с ожидаемыми полями;
-- evals на точность извлечения, полезность рекомендации, ложные действия,
-  стоимость и задержку;
-- adversarial-набор для prompt injection и повреждённых входных данных;
-- replay сохранённых AI-вызовов в тестовом режиме без повторной оплаты;
-- canary/feature flag перед включением новой версии промпта или модели.
+- unit tests for domain rules without a database or model;
+- integration tests for repositories, transactions, the outbox, and PostgreSQL;
+- API contract tests;
+- migration tests in both directions when rollback is supported;
+- a golden dataset for AI containing real but anonymized examples and expected
+  fields;
+- evaluations of extraction accuracy, recommendation usefulness, false actions,
+  cost, and latency;
+- an adversarial dataset for prompt injection and malformed input;
+- replay of recorded AI calls in tests without paying for repeated calls;
+- canary releases and feature flags before enabling a new prompt or model
+  version.
 
-LLM не вызывается в обычных unit-тестах. Провайдер скрывается за собственным
-интерфейсом, ответы записываются или подменяются стабильными fixtures.
+Unit tests must not call an LLM. The provider is hidden behind an internal
+interface, and responses are recorded or replaced with stable fixtures.
 
-## 11. Этапы разработки
+## 11. Development stages
 
-### Этап 0 — решения и каркас (2–4 дня)
+### Stage 0 — decisions and foundation (2–4 days)
 
-- записать 5–10 конкретных личных сценариев использования;
-- выбрать frontend и AI-провайдера, не связывая домен с их SDK;
-- поднять FastAPI, конфигурацию, PostgreSQL, миграции и проверки качества;
-- настроить Docker Compose, CI, health/readiness endpoints и логи;
-- оформить ADR для ключевых решений.
+- document 5–10 specific personal use cases;
+- choose the frontend and AI provider without coupling the domain to their SDKs;
+- initialize FastAPI, configuration, PostgreSQL, migrations, and quality checks;
+- configure Docker Compose, CI, health/readiness endpoints, and logging;
+- record key decisions as ADRs.
 
-Критерий готовности: приложение стартует одной командой, CI проходит, миграция
-создаёт пустую БД, API имеет request ID и единый формат ошибок.
+Completion criterion: the application starts with one command, CI passes, a
+migration initializes an empty database, and the API has request IDs and a
+common error format.
 
-### Этап 1 — CRM-ядро (1–2 недели)
+### Stage 1 — CRM core (1–2 weeks)
 
-- контакты, компании, сделки, стадии, задачи и активности;
-- CRUD плюс реальные бизнес-команды;
-- транзакции, optimistic locking и аудит;
-- фильтры, сортировка, pagination;
-- базовый web-интерфейс.
+- contacts, companies, deals, stages, tasks, and activities;
+- CRUD plus real business commands;
+- transactions, optimistic locking, and audit logging;
+- filters, sorting, and pagination;
+- basic web interface.
 
-Критерий готовности: ежедневную работу можно вести без ИИ и без ручного доступа
-к базе.
+Completion criterion: daily work can be managed without AI or direct database
+access.
 
-### Этап 2 — события и фоновые задачи (3–5 дней)
+### Stage 2 — events and background tasks (3–5 days)
 
-- outbox и worker;
-- идемпотентные обработчики;
-- Redis и очередь;
-- повторные попытки, dead-letter/failed jobs и наблюдаемость.
+- outbox and worker;
+- idempotent handlers;
+- Redis and a task queue;
+- retries, failed/dead-letter jobs, and observability.
 
-Критерий готовности: сбой worker не теряет событие и не дублирует результат.
+Completion criterion: a worker failure neither loses an event nor duplicates a
+result.
 
-### Этап 3 — первая ИИ-ценность (1 неделя)
+### Stage 3 — first AI value (1 week)
 
-- интерфейс AI-провайдера и реестр версий промптов;
-- structured output для извлечения сущностей;
-- сводка карточки;
-- черновик задач из заметки;
-- `ai_runs`, лимиты, логирование стоимости и ручное подтверждение.
+- AI-provider interface and prompt-version registry;
+- structured output for entity extraction;
+- record summaries;
+- draft tasks generated from notes;
+- `ai_runs`, limits, cost logging, and manual approval.
 
-Критерий готовности: результат воспроизводимо валидируется схемой, виден источник
-предложения, ошибка модели не мешает основной CRM.
+Completion criterion: results are reliably schema-validated, suggestion sources
+are visible, and model failure does not interrupt the core CRM.
 
-### Этап 4 — поиск и RAG (1 неделя)
+### Stage 4 — search and RAG (1 week)
 
-- полнотекстовый поиск PostgreSQL;
-- chunking и embeddings в фоне;
-- pgvector и гибридное ранжирование;
-- ссылки на использованные записи в ответе;
-- переиндексация при смене embedding-модели.
+- PostgreSQL full-text search;
+- background chunking and embeddings;
+- pgvector and hybrid ranking;
+- references to source records in answers;
+- reindexing when the embedding model changes.
 
-Критерий готовности: ответы содержат проверяемые ссылки на доступные пользователю
-записи, а поиск имеет измеримую точность на тестовом наборе.
+Completion criterion: answers contain verifiable references to records the user
+may access, and search quality is measured on a test dataset.
 
-### Этап 5 — интеграции (по одной за раз)
+### Stage 5 — integrations (one at a time)
 
-- импорт CSV;
-- календарь;
+- CSV import;
+- calendar;
 - email;
-- мессенджеры, если их API и правила использования это допускают.
+- messaging platforms where their APIs and terms allow it.
 
-Для каждой интеграции: отдельный adapter, sync cursor, дедупликация, повторные
-попытки, журнал импорта и возможность безопасно перепройти синхронизацию.
+For each integration, implement a separate adapter, sync cursor, deduplication,
+retries, import log, and the ability to rerun synchronization safely.
 
-### Этап 6 — рекомендации и управляемые агенты
+### Stage 6 — recommendations and controlled agents
 
-- next-best-action на основе прозрачных признаков;
-- конструктор простых правил `trigger -> conditions -> actions`;
-- agent runs как конечный автомат с паузой на подтверждение;
-- бюджет, число шагов, timeout и allowlist инструментов;
-- dashboard качества и отклонённых рекомендаций.
+- next-best-action recommendations based on transparent signals;
+- a simple `trigger -> conditions -> actions` rule builder;
+- agent runs represented as a state machine with approval pauses;
+- budget, step limit, timeout, and tool allowlist;
+- a dashboard for quality and rejected recommendations.
 
-## 12. Первые пользовательские истории
+## 12. Initial user stories
 
-1. «Я вставляю текст переписки; CRM предлагает контакт, заметку и задачи, а я
-   подтверждаю создание».
-2. «Я открываю сделку и вижу краткую сводку, последние события, риски и
-   рекомендуемый следующий шаг с причинами».
-3. «Я спрашиваю, с кем давно не связывался; поиск возвращает подходящие карточки
-   и объясняет критерий».
-4. «После встречи я сохраняю заметку; CRM предлагает задачи с датами и
-   ответственными».
-5. «Утром CRM показывает пять самых важных действий, но ничего не отправляет и
-   не меняет без моего подтверждения».
+1. “I paste a conversation; the CRM proposes a contact, note, and tasks, and I
+   confirm their creation.”
+2. “I open a deal and see a concise summary, recent events, risks, and a
+   recommended next step with reasons.”
+3. “I ask whom I have not contacted recently; search returns relevant records
+   and explains the criterion.”
+4. “After a meeting I save a note; the CRM proposes tasks with dates and
+   assignees.”
+5. “Every morning the CRM shows the five most important actions, but sends and
+   changes nothing without my confirmation.”
 
-## 13. Метрики продукта
+## 13. Product metrics
 
-- время от входящего текста до обновлённой карточки;
-- доля принятых/отклонённых ИИ-предложений;
-- доля предложений, отредактированных перед принятием;
-- полнота извлечения задач, дат и контактов;
-- число просроченных задач и сделок без активности;
-- p95 задержки API и фоновых ИИ-задач;
-- стоимость ИИ на активный день и на принятое предложение;
-- число ошибочных или неавторизованных действий — целевое значение ноль.
+- time from incoming text to an updated record;
+- percentage of accepted and rejected AI suggestions;
+- percentage of suggestions edited before acceptance;
+- extraction completeness for tasks, dates, and contacts;
+- number of overdue tasks and deals without activity;
+- p95 latency of API and background AI jobs;
+- AI cost per active day and per accepted suggestion;
+- number of incorrect or unauthorized actions — target: zero.
 
-## 14. Решения, которые нужно принять до начала кода
+## 14. Decisions required before feature development
 
-1. Какие 3 сценария дадут максимальную ежедневную пользу лично владельцу?
-2. Какие каналы данных нужны первыми: ручной ввод, CSV, email или календарь?
-3. Где будет развёрнута CRM: локально, VPS или managed cloud?
-4. Какой AI-провайдер допустим по цене и приватности?
-5. Какие действия ИИ никогда не может выполнять автоматически?
-6. Нужен ли только один пользователь или возможны помощники/команда?
-7. Нужна ли офлайн-работа и какой допустим срок хранения коммуникаций?
+1. Which three scenarios provide the greatest daily value to the owner?
+2. Which data channels come first: manual input, CSV, email, or calendar?
+3. Where will the CRM run: locally, on a VPS, or in a managed cloud?
+4. Which AI provider is acceptable for cost and privacy?
+5. Which actions may AI never perform automatically?
+6. Is there only one user, or could assistants or a team be added later?
+7. Is offline operation required, and how long may communications be retained?
 
-## 15. Ближайший практический спринт
+## 15. Next practical sprint
 
-1. Описать три главных сценария и acceptance criteria.
-2. Создать каркас FastAPI и модульную структуру.
-3. Настроить PostgreSQL, SQLAlchemy, Alembic и тестовую БД.
-4. Реализовать `Contact`, `Company`, `Deal`, `PipelineStage` и `Activity`.
-5. Добавить аудит и outbox до первой ИИ-функции.
-6. Реализовать сценарий «текст -> черновик контакта/заметки/задач» со structured
-   output и подтверждением.
-7. Собрать 20–50 обезличенных примеров для первой eval-выборки.
-8. Измерить качество, задержку и стоимость, затем решить, что делать следующим.
+1. Describe the three main scenarios and their acceptance criteria.
+2. Create the FastAPI foundation and modular structure.
+3. Configure PostgreSQL, SQLAlchemy, Alembic, and a test database.
+4. Implement `Contact`, `Company`, `Deal`, `PipelineStage`, and `Activity`.
+5. Add auditing and the outbox before the first AI capability.
+6. Implement “text -> contact/note/task drafts” with structured output and user
+   confirmation.
+7. Collect 20–50 anonymized examples for the first evaluation dataset.
+8. Measure quality, latency, and cost, then decide what to build next.
 
-## Полезные официальные материалы
+## Official references
 
-- [FastAPI: async и concurrency](https://fastapi.tiangolo.com/async/)
+- [FastAPI: async and concurrency](https://fastapi.tiangolo.com/async/)
 - [SQLAlchemy 2.0](https://docs.sqlalchemy.org/en/20/)
 - [Celery](https://docs.celeryq.dev/en/stable/)
 - [pgvector](https://github.com/pgvector/pgvector)

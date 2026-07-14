@@ -1,10 +1,10 @@
 # MyCRM API
 
-Backend приложения на FastAPI.
+The FastAPI backend of the application.
 
-## Локальный запуск
+## Local development
 
-Из корня проекта:
+From the project root:
 
 ```powershell
 Copy-Item .env.example .env
@@ -15,5 +15,5 @@ uv run alembic upgrade head
 uv run fastapi dev
 ```
 
-API будет доступен по адресу <http://localhost:8000>, документация —
+The API will be available at <http://localhost:8000>, and its documentation at
 <http://localhost:8000/docs>.

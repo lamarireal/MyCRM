@@ -1,26 +1,26 @@
-# ADR 0002: ИИ не изменяет данные напрямую
+# ADR 0002: AI does not modify data directly
 
-- Статус: принято
-- Дата: 2026-07-14
+- Status: accepted
+- Date: 2026-07-14
 
-## Контекст
+## Context
 
-CRM хранит персональные данные и выполняет значимые бизнес-действия. Ответ
-языковой модели недетерминирован и может содержать ошибку либо следовать
-инструкции из недоверенного внешнего текста.
+The CRM stores personal information and performs meaningful business actions. A
+language model response is nondeterministic and may contain an error or follow
+an instruction embedded in untrusted external text.
 
-## Решение
+## Decision
 
-ИИ получает только явно подготовленный и авторизованный контекст. Результат
-модели проходит валидацию типизированной схемой. Модель не получает прямого
-доступа к SQL; изменения выполняют application-сценарии после проверки прав и
-доменных правил. Рискованные действия требуют подтверждения пользователя.
+AI receives only explicitly prepared and authorized context. Model output is
+validated against a typed schema. The model has no direct SQL access; changes
+are performed by application use cases after authorization and domain-rule
+checks. Risky actions require user confirmation.
 
-Каждый ИИ-запуск в будущем сохраняет версию модели, версию промпта, ссылки на
-источники, результат, стоимость и решение пользователя.
+Every future AI run records the model version, prompt version, source links,
+result, cost, and the user's decision.
 
-## Последствия
+## Consequences
 
-- Основная CRM продолжает работать при недоступности AI-провайдера.
-- ИИ-функции требуют дополнительных контрактов и аудита.
-- Ошибочное предложение можно отклонить без повреждения данных.
+- The core CRM continues to operate when the AI provider is unavailable.
+- AI capabilities require additional contracts and auditing.
+- An incorrect suggestion can be rejected without damaging data.

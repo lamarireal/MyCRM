@@ -1,52 +1,69 @@
 # MyCRM
 
-Персональная CRM с глубокой интеграцией ИИ в бизнес-логику.
+A personal CRM with deep AI integration into business logic.
 
-## Стек
+## Stack
 
 - FastAPI / Python 3.12
 - PostgreSQL 18
 - React 19 / TypeScript / Vite
 
-## Быстрый запуск
+## Quick start
 
-1. Установите Docker Desktop.
-2. Создайте локальный файл окружения:
+### Requirements
+
+On Windows, install
+[Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/).
+It includes Docker Engine, the `docker` command, and modern Docker Compose v2.
+You do not need to install the Python `docker-compose` package with `pip`: it
+does not install Docker Engine and belongs to the obsolete Compose v1.
+
+After installation, start Docker Desktop, wait until the engine is ready, open
+a new PowerShell window, and verify the installation:
+
+```powershell
+docker --version
+docker compose version
+```
+
+### Start the application
+
+1. Create a local environment file:
 
    ```powershell
    Copy-Item .env.example .env
    ```
 
-3. Замените `change-me` в `.env` и запустите приложение:
+2. Replace `change-me` in `.env`, then start the application:
 
    ```powershell
    docker compose up --build
    ```
 
-После запуска:
+After startup:
 
-- интерфейс: <http://localhost:8080>;
+- UI: <http://localhost:8080>;
 - API: <http://localhost:8000>;
 - OpenAPI: <http://localhost:8000/docs>;
 - liveness: <http://localhost:8000/api/v1/health/live>;
 - readiness: <http://localhost:8000/api/v1/health/ready>.
 
-## Разработка
+## Development
 
-Backend и frontend находятся в отдельных каталогах:
+The backend and frontend live in separate directories:
 
 ```text
 backend/   FastAPI, SQLAlchemy, Alembic, pytest
 frontend/  React, TypeScript, Vite
-docs/      план и архитектурные решения
+docs/      project plan and architecture decisions
 ```
 
-Подробный план: [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md).
+Detailed plan: [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md).
 
-Учебное объяснение реализованного фундамента:
+Educational explanation of the implemented foundation:
 [about/STAGE_0_FOUNDATION.md](about/STAGE_0_FOUNDATION.md).
 
-Принятые решения:
+Accepted decisions:
 
-- [ADR 0001: модульный монолит](docs/adr/0001-modular-monolith.md);
-- [ADR 0002: граница безопасности ИИ](docs/adr/0002-ai-safety-boundary.md).
+- [ADR 0001: modular monolith](docs/adr/0001-modular-monolith.md);
+- [ADR 0002: AI safety boundary](docs/adr/0002-ai-safety-boundary.md).
