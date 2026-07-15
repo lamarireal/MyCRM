@@ -348,8 +348,11 @@ workspace.
 
 Status: in progress. Password authentication, revocable sessions, automatic
 private-workspace creation, membership-aware workspace resolution, and
-two-workspace isolation tests are implemented. CRM aggregates, auditing, demo
-seed/reset, and the working React CRM interface remain.
+two-workspace isolation tests are implemented. Workspace-scoped companies and
+contacts now provide filtered, paginated, versioned CRUD with archival and a
+database-enforced same-workspace relationship. Pipelines, deals, tasks,
+activities, notes, auditing, demo seed/reset, and the working React CRM
+interface remain.
 
 ### Stage 2 — events and background tasks (3–5 days)
 

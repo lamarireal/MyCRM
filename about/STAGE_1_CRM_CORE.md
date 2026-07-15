@@ -7,7 +7,7 @@ status is never confused with the final Stage 1 completion criterion.
 
 ## 1. Current implementation status
 
-The first Stage 1 slice is complete:
+The first two Stage 1 slices are complete:
 
 - passwords are hashed with Argon2id;
 - registration creates a user, private workspace, and owner membership;
@@ -21,10 +21,17 @@ The first Stage 1 slice is complete:
 - attempts to select another user's workspace return `404`;
 - PostgreSQL integration tests use two workspaces and transaction rollback;
 - the complete register/login/workspace/logout API flow is tested.
+- companies and contacts are workspace-owned aggregates;
+- contacts can reference only companies from the same workspace;
+- list endpoints provide bounded pagination, search, filtering, and sorting;
+- updates use optimistic version checks and return ETags;
+- delete commands archive records rather than physically removing them;
+- viewer and read-only contexts cannot mutate CRM records;
+- PostgreSQL and API tests cover isolation, stale writes, search, and archival.
 
-Stage 1 is not complete yet. Contacts, companies, pipelines, deals, tasks,
-activities, notes, auditing, synthetic demo data, and the working React CRM
-interface still need to be implemented.
+Stage 1 is not complete yet. Pipelines, deals, tasks, activities, notes,
+auditing, synthetic demo data, and the working React CRM interface still need
+to be implemented.
 
 ## 2. Why authentication comes before CRM tables
 
@@ -229,20 +236,175 @@ MYCRM_SESSION_TTL_DAYS
 `MYCRM_SECRET_KEY`, introduced during Stage 0.5, now protects session-token
 digests. Changing it is a deliberate global session-revocation operation.
 
-## 12. Remaining Stage 1 sequence
+## 12. Company and contact aggregates
+
+`Company` is the parent organization record. Its first fields are deliberately
+small: name, website, industry, lifecycle status, version, and timestamps. A
+small stable aggregate is easier to validate and evolve than a table containing
+every imagined CRM attribute before real use cases exist.
+
+`Contact` stores a person's name, email, phone, job title, and optional company.
+Both tables carry a non-null `workspace_id`; no use case accepts a workspace ID
+from its create or update payload. The application always copies it from the
+trusted `WorkspaceContext`.
+
+Every model uses UUID primary keys and timezone-aware timestamps. The API never
+exposes SQLAlchemy objects directly: response schemas define the public
+contract and prevent future internal fields from leaking accidentally.
+
+## 13. Database-enforced relationship isolation
+
+Application code verifies that a selected company is active and belongs to the
+current workspace before creating or updating a contact. This produces a clear
+`404` response instead of exposing whether a foreign company UUID exists.
+
+The database adds a second, independent boundary:
+
+```text
+contacts (workspace_id, company_id)
+    -> companies (workspace_id, id)
+```
+
+The composite foreign key makes the workspace part of the relationship itself.
+Even a future script, background task, or repository bug cannot attach a
+contact in workspace A to a company in workspace B. Integration tests bypass
+the application check intentionally and prove that PostgreSQL rejects the row.
+
+The foreign key uses `RESTRICT` rather than cascading company deletion into
+contacts. Removing an organization should never silently erase people. Current
+business commands archive companies, so normal workflows do not physically
+delete either aggregate.
+
+## 14. Workspace-scoped application operations
+
+All reads include both entity ID and trusted workspace ID:
+
+```text
+WHERE workspace_id = :context_workspace_id
+  AND id = :entity_id
+```
+
+An entity from another workspace is indistinguishable from a missing entity and
+returns `404`. List, search, count, update, and archive statements use the same
+scope. Isolation would be incomplete if only detail endpoints were protected
+while search or counts queried globally.
+
+Mutation use cases check `WorkspaceContext.can_write`. Owners, admins, and
+members of active workspaces may write. Viewers, demo visitors, and read-only
+workspaces cannot create, change, or archive records even if they call the API
+directly.
+
+## 15. Optimistic locking
+
+Companies and contacts begin with `version = 1`. Every successful update or
+archive increments the version atomically:
+
+```text
+UPDATE contacts
+SET ..., version = version + 1
+WHERE workspace_id = :workspace_id
+  AND id = :contact_id
+  AND version = :expected_version
+```
+
+Suppose two browser tabs load version 1. The first update succeeds and produces
+version 2. The second update still expects version 1, affects no row, and
+receives `409 Conflict`. Without this check, the second tab would silently
+overwrite the first tab's changes.
+
+Responses include an `ETag` derived from the current version, and mutation
+payloads contain `expected_version`. A future generated frontend client can
+keep the version beside cached data and show a refresh/merge interface on
+conflict.
+
+## 16. Archival instead of destructive deletion
+
+`DELETE` endpoints execute an archive business command. The record status
+changes from `active` to `archived`, its version increments, and default reads
+stop returning it. Administrative or recovery views can request
+`include_archived=true`.
+
+This provides a safer first CRM behavior because contacts and companies often
+participate in historical activities, deals, and audit records. Physical data
+deletion will later be a separate privacy/retention operation with explicit
+cascade rules, not an ordinary UI action.
+
+## 17. Query contracts
+
+Company and contact list endpoints provide:
+
+- `search`, limited to explicitly selected text fields;
+- `company_id` filtering for contacts;
+- `include_archived` for recovery-oriented views;
+- an allowlisted `sort` field and direction;
+- `limit` constrained to 1–100;
+- a non-negative `offset`;
+- total count and page metadata.
+
+User search text is escaped before it is placed inside an SQL `LIKE` pattern.
+This treats `%` and `_` as literal user input rather than accidental wildcard
+instructions. SQLAlchemy still binds all values as parameters, preventing SQL
+injection.
+
+Offset pagination is acceptable for the initial company and contact directory.
+Growing append-only streams such as activities and audit logs will use cursor
+pagination as required by the API rules.
+
+## 18. API endpoints added
+
+```text
+POST   /api/v1/companies
+GET    /api/v1/companies
+GET    /api/v1/companies/{company_id}
+PATCH  /api/v1/companies/{company_id}
+DELETE /api/v1/companies/{company_id}
+
+POST   /api/v1/contacts
+GET    /api/v1/contacts
+GET    /api/v1/contacts/{contact_id}
+PATCH  /api/v1/contacts/{contact_id}
+DELETE /api/v1/contacts/{contact_id}
+```
+
+Every endpoint requires authentication and `X-Workspace-ID`. Pydantic validates
+lengths, email addresses, URLs, UUIDs, pagination bounds, and update payloads
+before an application use case runs.
+
+## 19. Migration and tests
+
+Migration `20260715_0004_contacts_companies.py` creates both tables, lifecycle
+checks, query indexes, and the composite relationship constraint. Downgrade
+drops contacts before companies so the dependency order remains valid.
+
+An Alembic metadata comparison also exposed nullable timestamp columns left by
+the early foundation migrations. Migration
+`20260715_0005_align_model_constraints.py` makes those timestamps non-null and
+aligns the workspace-status storage length with its enum. This is a follow-up
+migration rather than an edit to committed history, so databases that already
+applied the earlier revisions remain reproducible and upgrade safely.
+
+Integration coverage now proves:
+
+- successful company/contact creation inside one workspace;
+- detail and list isolation from a second workspace;
+- application rejection of a foreign company relationship;
+- PostgreSQL rejection when the application boundary is bypassed;
+- stale update rejection;
+- search and company filtering;
+- removal of a company relationship through a versioned update;
+- viewer write denial;
+- API ETags, pagination, update, conflict, and archive behavior.
+
+## 20. Remaining Stage 1 sequence
 
 The next implementation slices are:
 
-1. shared workspace-owned model primitives and repository conventions;
-2. contacts and companies;
-3. pipelines, stages, and deals;
-4. tasks, activities, and notes;
-5. optimistic locking and deterministic business commands;
-6. audit records for every mutation;
-7. filtering, sorting, and pagination;
-8. versioned synthetic demo seed and idempotent reset;
-9. a backend-resolved anonymous demo context;
-10. the React authentication, workspace, and CRM interface.
+1. pipelines, stages, and deals;
+2. tasks, activities, and notes;
+3. audit records for every mutation;
+4. versioned synthetic demo seed and idempotent reset;
+5. a backend-resolved anonymous demo context;
+6. the React authentication, workspace, and CRM interface.
 
 AI remains outside Stage 1. The CRM must first be useful, secure, and testable
 without a model provider.

@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from mycrm.core.config import get_settings
 from mycrm.core.database import Base
+from mycrm.modules.companies import models as company_models  # noqa: F401
+from mycrm.modules.contacts import models as contact_models  # noqa: F401
 from mycrm.modules.identity import models as identity_models  # noqa: F401
 from mycrm.modules.workspaces import models as workspace_models  # noqa: F401
 
