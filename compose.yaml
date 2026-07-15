@@ -21,10 +21,12 @@ services:
   api:
     build:
       context: ./backend
+    command: ["sh", "-c", "alembic upgrade head && fastapi run --host 0.0.0.0 --port 8000"]
     environment:
       MYCRM_APP_ENV: local
       MYCRM_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mycrm}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-mycrm}
       MYCRM_CORS_ORIGINS: '["http://localhost:5173", "http://localhost:8080"]'
+      MYCRM_ALLOWED_HOSTS: '["localhost", "127.0.0.1", "api", "test"]'
     ports:
       - "8000:8000"
     depends_on:

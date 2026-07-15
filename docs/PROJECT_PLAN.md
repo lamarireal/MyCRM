@@ -2,10 +2,14 @@
 
 ## 1. Product vision
 
-MyCRM is a personal CRM in which AI is not a separate chatbot. Instead, it
-assists inside ordinary workflows: it interprets incoming messages, enriches
-records, suggests next actions, drafts replies, identifies risks, and explains
-its recommendations.
+MyCRM is a production-oriented CRM and public portfolio project in which AI is
+not a separate chatbot. Instead, it assists inside ordinary workflows: it
+interprets incoming messages, enriches records, suggests next actions, drafts
+replies, identifies risks, and explains its recommendations.
+
+The application serves three compatible purposes: a private workspace for the
+owner, isolated workspaces for future users or teams, and a safe public demo
+containing only synthetic, resettable data.
 
 The primary principle is that conventional business logic remains
 deterministic, testable, and authoritative. The model proposes or prepares
@@ -25,10 +29,14 @@ The first useful version should make it possible to:
 7. Convert free-form text into a draft structured CRM record.
 8. Control every change through an event log and confirmation of dangerous
    actions.
+9. Let a public visitor explore a realistic seeded CRM without registration or
+   access to private data.
+10. Run from a reproducible production deployment with HTTPS, health checks,
+    managed secrets, backups, and rollback instructions.
 
 The first version should not include a complex automation builder,
-multi-organization support, a mobile application, microservices, custom model
-training, or a fully autonomous agent.
+enterprise billing, advanced team administration, a mobile application,
+microservices, custom model training, or a fully autonomous agent.
 
 ## 3. Recommended stack
 
@@ -78,6 +86,7 @@ src/mycrm/
   core/                 # configuration, security, database, logging, errors
   modules/
     identity/           # user, sessions, API keys
+    workspaces/         # workspace ownership, memberships, demo access
     contacts/
     companies/
     deals/
@@ -110,9 +119,15 @@ invokes an application use case, and converts the result into an HTTP response.
 
 ## 5. Base data model
 
-Minimum entities:
+Minimum identity and ownership entities:
 
-- `users` — CRM owner and preferences;
+- `users` — identities and preferences;
+- `workspaces` — the primary tenant and data-ownership boundary;
+- `workspace_memberships` — user role and membership in a workspace;
+- `demo_sessions` — optional temporary visitor-to-workspace assignment;
+
+Minimum workspace-owned entities:
+
 - `contacts` — people, contact details, tags, source, and owner;
 - `companies` — organizations and their relationships to contacts;
 - `pipelines`, `pipeline_stages` — configurable pipelines;
@@ -135,10 +150,15 @@ Minimum entities:
 - `knowledge_documents`, `knowledge_chunks`, `embeddings` — knowledge base and
   RAG.
 
-Use UUIDs and UTC timestamps from the beginning. Apply optimistic locking with a
-`version` field to mutable entities and use soft deletion only where recovery is
-actually required. Store monetary values as decimal plus a currency code, never
-as floating-point numbers.
+Every CRM aggregate, audit record, event, AI run, knowledge document, embedding,
+and attachment must carry a non-null `workspace_id`. Repository and application
+operations always receive an explicit workspace context. Business uniqueness
+constraints are scoped to the workspace.
+
+Use UUIDs and UTC timestamps from the beginning. Apply optimistic locking with
+a `version` field to mutable entities and use soft deletion only where recovery
+is actually required. Store monetary values as decimal plus a currency code,
+never as floating-point numbers.
 
 ## 6. AI as a separate subsystem
 
@@ -222,8 +242,8 @@ execution status.
 
 ## 9. Security and privacy
 
-Even a personal CRM contains sensitive information. The minimum requirements
-are:
+A publicly deployed CRM contains sensitive data and is continuously exposed to
+untrusted traffic. The minimum requirements are:
 
 - Argon2id password hashing or authentication through a trusted OAuth/OIDC
   provider;
@@ -239,6 +259,12 @@ are:
 - the ability to delete user data and associated embeddings;
 - configuration of which data types may be sent to each AI provider;
 - regular backups and tested restoration.
+- strict workspace scoping for every read and write;
+- synthetic data only in the public demo;
+- per-IP, per-session, and global limits for expensive or state-changing demo
+  operations;
+- a backend-enforced read-only fallback for the demo;
+- separate local, test, staging, and production secrets.
 
 ## 10. Testing AI and conventional logic
 
@@ -274,16 +300,51 @@ Completion criterion: the application starts with one command, CI passes, a
 migration initializes an empty database, and the API has request IDs and a
 common error format.
 
+### Stage 0.5 — public production and demo foundation (implemented)
+
+- redefine data ownership around workspaces rather than a single owner;
+- specify membership roles and workspace-aware authorization boundaries;
+- define a public demo containing only synthetic, resettable data;
+- document disabled demo side effects and AI budgets;
+- separate local and production configuration;
+- define managed deployment for frontend, API, and private PostgreSQL;
+- define production secret, migration, HTTPS, backup, health-check, rollback,
+  and observability requirements;
+- expand CI requirements to include container builds, a real PostgreSQL
+  migration test, and an end-to-end smoke test;
+- record workspace, demo, and deployment decisions as ADRs.
+- implement the identity/workspace schema and trusted workspace context;
+- fail closed on unsafe production configuration;
+- enforce initial request-size, rate, host, CORS, and demo-side-effect policies;
+- provide a managed deployment blueprint and release migration command.
+
+Completion criterion: Stage 1 can create every domain table with a stable
+workspace boundary, and the project has an explicit path from local Compose to a
+safe public demo deployment.
+
+Status: the repository foundation is implemented and verified locally. The
+actual public launch remains an operational task because HTTPS, monitoring,
+backup restoration, and the live URL can only be verified after deployment.
+
+Detailed architecture and learning notes:
+[Stage 0.5: Public Production and Demo Architecture](../about/STAGE_0_5_PUBLIC_PRODUCTION.md).
+
 ### Stage 1 — CRM core (1–2 weeks)
 
+- authentication and server-resolved context for the existing users,
+  workspaces, and memberships;
 - contacts, companies, deals, stages, tasks, and activities;
+- `workspace_id` on every CRM entity, index, and repository operation;
 - CRUD plus real business commands;
 - transactions, optimistic locking, and audit logging;
 - filters, sorting, and pagination;
-- basic web interface.
+- basic web interface;
+- a versioned synthetic demo seed;
+- cross-workspace authorization tests.
 
 Completion criterion: daily work can be managed without AI or direct database
-access.
+access, and a visitor can explore seeded demo data without accessing another
+workspace.
 
 ### Stage 2 — events and background tasks (3–5 days)
 
@@ -347,6 +408,10 @@ retries, import log, and the ability to rerun synchronization safely.
    assignees.”
 5. “Every morning the CRM shows the five most important actions, but sends and
    changes nothing without my confirmation.”
+6. “As a portfolio visitor, I open a live demo, explore realistic synthetic
+   contacts and deals, and understand which actions are temporary or disabled.”
+7. “As the owner, I can use my private workspace without any demo visitor being
+   able to read or modify it.”
 
 ## 13. Product metrics
 
@@ -358,28 +423,41 @@ retries, import log, and the ability to rerun synchronization safely.
 - p95 latency of API and background AI jobs;
 - AI cost per active day and per accepted suggestion;
 - number of incorrect or unauthorized actions — target: zero.
+- number of successful cross-workspace access attempts — target: zero;
+- public demo uptime and p95 page-load time;
+- demo reset success rate;
+- abusive requests rejected by rate limits;
+- AI cost per demo visitor and per day.
 
 ## 14. Decisions required before feature development
 
-1. Which three scenarios provide the greatest daily value to the owner?
+1. Which three scenarios provide the greatest daily value to the owner and best
+   demonstrate the product publicly?
 2. Which data channels come first: manual input, CSV, email, or calendar?
 3. Where will the CRM run: locally, on a VPS, or in a managed cloud?
 4. Which AI provider is acceptable for cost and privacy?
 5. Which actions may AI never perform automatically?
-6. Is there only one user, or could assistants or a team be added later?
+6. Which membership roles are required in the first version?
 7. Is offline operation required, and how long may communications be retained?
+8. Should the first demo be shared and periodically reset, or should each
+   visitor receive an ephemeral workspace?
+9. Which operations are read-only, disabled, rate-limited, or simulated in demo
+   mode?
 
 ## 15. Next practical sprint
 
-1. Describe the three main scenarios and their acceptance criteria.
-2. Create the FastAPI foundation and modular structure.
-3. Configure PostgreSQL, SQLAlchemy, Alembic, and a test database.
-4. Implement `Contact`, `Company`, `Deal`, `PipelineStage`, and `Activity`.
+1. Add authentication and derive the active workspace context from a trusted
+   identity or demo session.
+2. Add integration fixtures containing two workspaces.
+3. Implement workspace-owned `Contact`, `Company`, `Deal`, `PipelineStage`, and
+   `Activity` entities.
+4. Add repository-level cross-workspace denial tests before expanding CRUD.
 5. Add auditing and the outbox before the first AI capability.
-6. Implement “text -> contact/note/task drafts” with structured output and user
-   confirmation.
-7. Collect 20–50 anonymized examples for the first evaluation dataset.
-8. Measure quality, latency, and cost, then decide what to build next.
+6. Create a versioned synthetic demo seed and an idempotent reset use case.
+7. Deploy the prepared production blueprint and verify operational controls.
+8. Implement “text -> contact/note/task drafts” with structured output and user
+   confirmation after the ownership boundary is proven.
+9. Collect 20–50 anonymized examples for the first evaluation dataset.
 
 ## Official references
 
@@ -387,3 +465,7 @@ retries, import log, and the ability to rerun synchronization safely.
 - [SQLAlchemy 2.0](https://docs.sqlalchemy.org/en/20/)
 - [Celery](https://docs.celeryq.dev/en/stable/)
 - [pgvector](https://github.com/pgvector/pgvector)
+- [PostgreSQL Row-Level Security](https://www.postgresql.org/docs/17/ddl-rowsecurity.html)
+- [FastAPI deployment concepts](https://fastapi.tiangolo.com/deployment/concepts/)
+- [Docker Compose secrets](https://docs.docker.com/compose/how-tos/use-secrets/)
+- [Render web services](https://render.com/docs/web-services)

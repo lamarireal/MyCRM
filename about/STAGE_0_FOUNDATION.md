@@ -1087,6 +1087,8 @@ a testable foundation:
 - CI verifies both sides of the application;
 - AI integration rules are documented before dangerous actions exist.
 
-The next stage is the CRM core. This foundation will support domain models,
-application use cases, repositories, transactions, auditing, and the first real
-user operations.
+The production and public-demo extension of this foundation is documented in
+[Stage 0.5](STAGE_0_5_PUBLIC_PRODUCTION.md). After those ownership and deployment
+boundaries are defined, Stage 1 can safely introduce domain models, application
+use cases, repositories, transactions, auditing, and the first real user
+operations.
