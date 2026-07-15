@@ -14,7 +14,12 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from mycrm.core.database import Base
-from mycrm.modules.workspaces.domain import WorkspaceKind, WorkspaceRole, WorkspaceStatus
+from mycrm.modules.workspaces.domain import (
+    MembershipStatus,
+    WorkspaceKind,
+    WorkspaceRole,
+    WorkspaceStatus,
+)
 
 
 class Workspace(Base):
@@ -60,6 +65,10 @@ class WorkspaceMembership(Base):
             "role IN ('owner', 'admin', 'member', 'viewer', 'demo_visitor')",
             name="ck_workspace_memberships_role",
         ),
+        CheckConstraint(
+            "status IN ('active', 'suspended')",
+            name="ck_workspace_memberships_status",
+        ),
         UniqueConstraint("workspace_id", "user_id", name="uq_membership_workspace_user"),
         Index("ix_workspace_memberships_user_id", "user_id"),
     )
@@ -76,6 +85,16 @@ class WorkspaceMembership(Base):
             native_enum=False,
             values_callable=lambda enum: [member.value for member in enum],
         )
+    )
+    status: Mapped[MembershipStatus] = mapped_column(
+        Enum(
+            MembershipStatus,
+            name="membership_status",
+            native_enum=False,
+            values_callable=lambda enum: [member.value for member in enum],
+        ),
+        default=MembershipStatus.ACTIVE,
+        server_default=MembershipStatus.ACTIVE.value,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

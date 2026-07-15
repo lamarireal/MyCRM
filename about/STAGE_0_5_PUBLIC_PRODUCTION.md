@@ -954,8 +954,9 @@ workspace-isolation tests. Ruff, formatting, strict mypy checks, pytest, Alembic
 SQL compilation, frontend linting, TypeScript checking, and a production Vite
 build pass locally.
 
-Docker and live PostgreSQL verification could not be run in this local session
-because Docker Desktop was not active. Those checks are encoded in CI. A public
-launch is still intentionally incomplete until the managed deployment exists
-and HTTPS, private database networking, monitoring, backup restoration, and
-rollback have been tested against that real environment.
+The complete local Docker Compose startup was subsequently verified by the
+project owner. Stage 1 migrations and isolation tests were also executed
+against the local PostgreSQL container. The same checks remain encoded in CI.
+A public launch is still intentionally incomplete until the managed deployment
+exists and HTTPS, private database networking, monitoring, backup restoration,
+and rollback have been tested against that real environment.

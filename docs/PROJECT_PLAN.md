@@ -346,6 +346,11 @@ Completion criterion: daily work can be managed without AI or direct database
 access, and a visitor can explore seeded demo data without accessing another
 workspace.
 
+Status: in progress. Password authentication, revocable sessions, automatic
+private-workspace creation, membership-aware workspace resolution, and
+two-workspace isolation tests are implemented. CRM aggregates, auditing, demo
+seed/reset, and the working React CRM interface remain.
+
 ### Stage 2 — events and background tasks (3–5 days)
 
 - outbox and worker;

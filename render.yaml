@@ -25,6 +25,8 @@ services:
         value: "true"
       - key: MYCRM_DEMO_READ_ONLY
         value: "true"
+      - key: MYCRM_REGISTRATION_ENABLED
+        value: "false"
 
   - type: web
     name: mycrm-web

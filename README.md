@@ -84,6 +84,9 @@ Educational explanation of the implemented foundation:
 Public-production and demo architecture:
 [about/STAGE_0_5_PUBLIC_PRODUCTION.md](about/STAGE_0_5_PUBLIC_PRODUCTION.md).
 
+Stage 1 CRM core implementation notes:
+[about/STAGE_1_CRM_CORE.md](about/STAGE_1_CRM_CORE.md).
+
 Accepted decisions:
 
 - [ADR 0001: modular monolith](docs/adr/0001-modular-monolith.md);

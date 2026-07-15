@@ -24,6 +24,11 @@ class WorkspaceRole(StrEnum):
     DEMO_VISITOR = "demo_visitor"
 
 
+class MembershipStatus(StrEnum):
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+
+
 class WorkspaceAccessDeniedError(Exception):
     """Raised when an entity does not belong to the trusted workspace context."""
 

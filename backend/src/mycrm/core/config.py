@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     demo_enabled: bool = False
     demo_read_only: bool = True
     demo_workspace_slug: str = "public-demo"
+    registration_enabled: bool = False
+    session_cookie_name: str = "mycrm_session"
+    session_ttl_days: int = Field(default=14, ge=1, le=90)
 
     @field_validator("database_url", mode="before")
     @classmethod

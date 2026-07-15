@@ -28,6 +28,7 @@ jobs:
     env:
       MYCRM_APP_ENV: test
       MYCRM_DATABASE_URL: postgresql+asyncpg://mycrm:test-password@localhost:5432/mycrm_test
+      MYCRM_TEST_DATABASE_URL: postgresql+asyncpg://mycrm:test-password@localhost:5432/mycrm_test
     defaults:
       run:
         working-directory: backend
@@ -41,8 +42,8 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy src
-      - run: uv run pytest
       - run: uv run alembic upgrade head
+      - run: uv run pytest
       - run: uv run alembic downgrade base
       - run: uv run alembic upgrade head
 
