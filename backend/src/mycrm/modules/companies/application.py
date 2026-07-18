@@ -7,6 +7,7 @@ from sqlalchemy import Select, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
+from mycrm.modules.audit.application import model_snapshot, record_audit
 from mycrm.modules.companies.models import Company
 from mycrm.modules.crm_shared import (
     EntityNotFoundError,
@@ -68,6 +69,15 @@ async def create_company(
     session.add(company)
     await session.flush()
     await session.refresh(company)
+    await record_audit(
+        session,
+        context,
+        action="created",
+        entity_type="company",
+        entity_id=company.id,
+        before_state=None,
+        after_state=model_snapshot(company),
+    )
     return company
 
 
@@ -157,6 +167,8 @@ async def update_company(
     changes: CompanyChanges,
 ) -> Company:
     require_workspace_write(context.can_write)
+    current = await get_company(session, context, company_id)
+    before = model_snapshot(current)
     values: dict[str, object] = {
         "version": Company.version + 1,
         "updated_at": func.now(),
@@ -182,6 +194,15 @@ async def update_company(
     company = (await session.scalars(statement)).one_or_none()
     if company is None:
         await _raise_update_failure(session, context, company_id)
+    await record_audit(
+        session,
+        context,
+        action="updated",
+        entity_type="company",
+        entity_id=company.id,
+        before_state=before,
+        after_state=model_snapshot(company),
+    )
     return company
 
 
@@ -193,6 +214,8 @@ async def archive_company(
     expected_version: int,
 ) -> Company:
     require_workspace_write(context.can_write)
+    current = await get_company(session, context, company_id)
+    before = model_snapshot(current)
     statement = (
         update(Company)
         .where(
@@ -211,4 +234,13 @@ async def archive_company(
     company = (await session.scalars(statement)).one_or_none()
     if company is None:
         await _raise_update_failure(session, context, company_id)
+    await record_audit(
+        session,
+        context,
+        action="archived",
+        entity_type="company",
+        entity_id=company.id,
+        before_state=before,
+        after_state=model_snapshot(company),
+    )
     return company

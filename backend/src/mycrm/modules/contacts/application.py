@@ -7,6 +7,7 @@ from sqlalchemy import Select, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
+from mycrm.modules.audit.application import model_snapshot, record_audit
 from mycrm.modules.companies.models import Company
 from mycrm.modules.contacts.models import Contact
 from mycrm.modules.crm_shared import (
@@ -96,6 +97,15 @@ async def create_contact(
     session.add(contact)
     await session.flush()
     await session.refresh(contact)
+    await record_audit(
+        session,
+        context,
+        action="created",
+        entity_type="contact",
+        entity_id=contact.id,
+        before_state=None,
+        after_state=model_snapshot(contact),
+    )
     return contact
 
 
@@ -195,6 +205,8 @@ async def update_contact(
     changes: ContactChanges,
 ) -> Contact:
     require_workspace_write(context.can_write)
+    current = await get_contact(session, context, contact_id)
+    before = model_snapshot(current)
     if "company_id" in changes:
         await _require_company(session, context, changes["company_id"])
 
@@ -230,6 +242,15 @@ async def update_contact(
     contact = (await session.scalars(statement)).one_or_none()
     if contact is None:
         await _raise_update_failure(session, context, contact_id)
+    await record_audit(
+        session,
+        context,
+        action="updated",
+        entity_type="contact",
+        entity_id=contact.id,
+        before_state=before,
+        after_state=model_snapshot(contact),
+    )
     return contact
 
 
@@ -241,6 +262,8 @@ async def archive_contact(
     expected_version: int,
 ) -> Contact:
     require_workspace_write(context.can_write)
+    current = await get_contact(session, context, contact_id)
+    before = model_snapshot(current)
     statement = (
         update(Contact)
         .where(
@@ -259,4 +282,13 @@ async def archive_contact(
     contact = (await session.scalars(statement)).one_or_none()
     if contact is None:
         await _raise_update_failure(session, context, contact_id)
+    await record_audit(
+        session,
+        context,
+        action="archived",
+        entity_type="contact",
+        entity_id=contact.id,
+        before_state=before,
+        after_state=model_snapshot(contact),
+    )
     return contact

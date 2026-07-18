@@ -350,9 +350,14 @@ Status: in progress. Password authentication, revocable sessions, automatic
 private-workspace creation, membership-aware workspace resolution, and
 two-workspace isolation tests are implemented. Workspace-scoped companies and
 contacts now provide filtered, paginated, versioned CRUD with archival and a
-database-enforced same-workspace relationship. Pipelines, deals, tasks,
-activities, notes, auditing, demo seed/reset, and the working React CRM
-interface remain.
+database-enforced same-workspace relationship. Pipelines, ordered stages, and
+versioned deals with an atomic move-stage command are implemented.
+Workspace-scoped tasks, append-only activities, and versioned notes now include
+application and database-level relationship isolation. Pipeline stages now
+support versioned metadata updates, atomic reordering, and safe archival with
+explicit deal migration. Every CRM mutation writes an immutable,
+workspace-scoped audit record in the same transaction. Demo seed/reset,
+anonymous demo access, and the working React CRM interface remain.
 
 ### Stage 2 — events and background tasks (3–5 days)
 

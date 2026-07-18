@@ -22,6 +22,14 @@ class RelatedEntityNotFoundError(Exception):
     pass
 
 
+class RelatedEntityMismatchError(Exception):
+    pass
+
+
+class StageOperationError(Exception):
+    pass
+
+
 def require_workspace_write(can_write: bool) -> None:
     if not can_write:
         raise WorkspaceWriteForbiddenError

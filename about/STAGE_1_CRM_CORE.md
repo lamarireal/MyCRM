@@ -28,8 +28,14 @@ The first two Stage 1 slices are complete:
 - delete commands archive records rather than physically removing them;
 - viewer and read-only contexts cannot mutate CRM records;
 - PostgreSQL and API tests cover isolation, stale writes, search, and archival.
+- pipelines are created with ordered, validated stages;
+- deals store exact decimal money and ISO-style uppercase currency codes;
+- deal relationships are constrained to the same workspace and pipeline;
+- `move-stage` atomically derives status and probability from the target stage;
+- won and lost stages produce deterministic deal lifecycle states;
+- pipeline/deal API and PostgreSQL boundary tests are implemented.
 
-Stage 1 is not complete yet. Pipelines, deals, tasks, activities, notes,
+Stage 1 is not complete yet. Pipeline editing, tasks, activities, notes,
 auditing, synthetic demo data, and the working React CRM interface still need
 to be implemented.
 
@@ -395,16 +401,391 @@ Integration coverage now proves:
 - viewer write denial;
 - API ETags, pagination, update, conflict, and archive behavior.
 
-## 20. Remaining Stage 1 sequence
+## 20. Pipelines and ordered stages
+
+A pipeline is created as one aggregate together with its initial stages. Stage
+positions are assigned by the backend from request order, starting at 1. This
+avoids trusting clients to submit conflicting positions and guarantees a
+stable visual order.
+
+Each stage defines:
+
+- a name unique inside the creation request;
+- probability from 0 to 100;
+- position greater than zero;
+- outcome: `open`, `won`, or `lost`;
+- lifecycle status and optimistic version.
+
+The database enforces unique positions inside `(workspace_id, pipeline_id)`.
+Pipeline creation is transactional, so failure to create any stage rolls back
+the parent pipeline as well.
+
+## 21. Deal model and exact money
+
+A deal belongs to one workspace, pipeline, and pipeline stage. It may reference
+a company and contact from the same workspace. It stores title, optional
+amount, three-letter currency code, probability, expected close date, lifecycle
+status, version, and UTC timestamps.
+
+Amounts use PostgreSQL `NUMERIC(18, 2)` and Python `Decimal`. Binary floating
+point is unsuitable for money because common decimal values cannot be
+represented exactly. Tests verify that `1234.56` returns as the same decimal
+value.
+
+Deal states are:
+
+```text
+open | won | lost | archived
+```
+
+`archived` is an explicit recovery-oriented lifecycle state. `won` and `lost`
+are derived from stage outcomes rather than independently supplied by clients.
+
+## 22. Composite relationship constraints
+
+Deals use several database-level same-workspace relationships:
+
+```text
+(workspace_id, company_id) -> companies
+(workspace_id, contact_id) -> contacts
+(workspace_id, pipeline_id) -> pipelines
+(workspace_id, pipeline_id, stage_id) -> pipeline_stages
+```
+
+The three-column stage foreign key is particularly important. Checking only
+`stage_id` would prove that a stage exists, but not that it belongs to the
+deal's selected pipeline. The composite key makes both pipeline membership and
+workspace isolation database invariants.
+
+The application performs the same checks first to return safe, understandable
+errors. PostgreSQL remains the final boundary for scripts, jobs, imports, and
+future code paths.
+
+## 23. Move-stage as a business command
+
+Changing a deal stage has business meaning and therefore uses a dedicated
+command endpoint instead of a generic field patch:
+
+```text
+POST /api/v1/deals/{deal_id}/move-stage
+```
+
+The command:
+
+1. resolves the deal inside the trusted workspace;
+2. resolves an active target stage inside the same pipeline;
+3. checks the expected deal version;
+4. changes the stage;
+5. copies the stage probability;
+6. derives `open`, `won`, or `lost` from stage outcome;
+7. increments the version and update timestamp atomically.
+
+Two simultaneous moves from version 1 cannot both succeed. The first creates
+version 2; the second receives `409 Conflict` rather than silently moving the
+deal from an outdated screen.
+
+## 24. Pipeline and deal API
+
+```text
+POST /api/v1/pipelines
+GET  /api/v1/pipelines
+GET  /api/v1/pipelines/{pipeline_id}
+
+POST   /api/v1/deals
+GET    /api/v1/deals
+GET    /api/v1/deals/{deal_id}
+PATCH  /api/v1/deals/{deal_id}
+POST   /api/v1/deals/{deal_id}/move-stage
+DELETE /api/v1/deals/{deal_id}
+```
+
+Deal listing supports bounded pagination, text search, pipeline, stage, and
+status filters. General patching can change descriptive and monetary fields but
+cannot bypass the dedicated pipeline-stage transition command.
+
+Pipeline stage editing and reordering were intentionally deferred until the
+rules for active deals, position swaps, stage removal, and audit history were
+defined. Sections 33–38 describe the implemented commands.
+
+## 25. Migration and verification
+
+Migration `20260715_0006_pipelines_deals.py` creates pipelines, stages, deals,
+indexes, checks, and composite foreign keys. It also adds the composite contact
+uniqueness required as a PostgreSQL foreign-key target.
+
+Tests prove:
+
+- ordered stage creation;
+- cross-workspace pipeline invisibility;
+- exact decimal storage;
+- stage-derived probability and deal status;
+- stale transition rejection;
+- application rejection of a foreign workspace pipeline;
+- PostgreSQL rejection when that application check is bypassed;
+- the complete pipeline/create-deal/move-to-won API flow;
+- filtering won deals after transition.
+
+Alembic metadata comparison reports no uncommitted schema operations.
+
+## 26. Remaining Stage 1 sequence
 
 The next implementation slices are:
 
-1. pipelines, stages, and deals;
-2. tasks, activities, and notes;
-3. audit records for every mutation;
-4. versioned synthetic demo seed and idempotent reset;
-5. a backend-resolved anonymous demo context;
-6. the React authentication, workspace, and CRM interface.
+1. versioned synthetic demo seed and idempotent reset;
+2. a backend-resolved anonymous demo context;
+3. the React authentication, workspace, and CRM interface;
+4. final Docker and end-to-end verification.
 
 AI remains outside Stage 1. The CRM must first be useful, secure, and testable
 without a model provider.
+
+## 27. Tasks as workflow entities
+
+A task is more than a title and checkbox. It records priority, optional due
+time, assignee, description, lifecycle state, completion time, optimistic
+version, and links to relevant CRM records.
+
+The supported states are:
+
+```text
+todo | in_progress | done | cancelled | archived
+```
+
+Descriptive changes use `PATCH`, while state transitions use the explicit
+`change-status` command. This prevents an ordinary edit form from accidentally
+bypassing workflow behavior. Entering `done` sets `completed_at`; leaving
+`done` clears it. Archival remains separate, and archived tasks disappear from
+normal reads.
+
+Every mutation compares `expected_version` in the same SQL statement that
+changes the task. A stale browser therefore receives a conflict instead of
+silently overwriting a newer status or assignee.
+
+## 28. Assignees and CRM relationships
+
+Tasks may be unassigned or assigned to an active member of the current
+workspace. A global user ID is not enough: the application verifies active
+membership before storing it.
+
+Tasks, activities, and notes may each reference a company, contact, and deal at
+the same time. Multiple links are useful because a meeting can belong to a
+deal while also appearing in the customer and contact timelines. Each link is
+optional, but every supplied link must point to an active record in the same
+workspace.
+
+The reusable `crm_relations` application helper performs friendly validation.
+PostgreSQL independently protects the boundary with composite foreign keys:
+
+```text
+(workspace_id, company_id) -> companies
+(workspace_id, contact_id) -> contacts
+(workspace_id, deal_id)    -> deals
+```
+
+This required a composite uniqueness constraint on `(workspace_id, id)` for
+deals. The two-layer approach protects normal API requests as well as future
+imports, scripts, workers, and administrative code.
+
+## 29. Append-only activity timeline
+
+Activities represent facts that happened: calls, meetings, emails, deal-stage
+changes, task events, and other interactions. Each record contains an event
+time, summary, optional details, creator, related records, and source:
+
+```text
+human | rule | ai | system
+```
+
+The public creation route always records `human`. Future rules, AI workflows,
+and system handlers will call the internal use case with their explicit
+source. A client cannot impersonate an AI or system action.
+
+Activities expose create, list, and detail routes only. There are deliberately
+no update or delete routes because changing history would make later auditing,
+AI explanations, and customer timelines unreliable. Corrections should be
+represented by a new activity rather than rewriting the original fact.
+
+The list uses cursor pagination ordered by `(occurred_at DESC, id ASC)`. The
+cursor identifies the last visible record and creates a stable boundary for
+the next page. This is better than offsets for a growing timeline because new
+events do not shift already visited pages.
+
+## 30. Versioned notes
+
+Notes contain original text and reserve `normalized_body` for a later
+deterministic or AI-assisted normalization pipeline. The original body remains
+the authoritative human input; normalization must never silently replace it.
+
+Unlike activities, notes are working documents and may be corrected. Updates
+therefore use optimistic locking and ETags. Archival is soft deletion, allowing
+future recovery without exposing archived text in ordinary queries.
+
+## 31. API surface
+
+```text
+POST   /api/v1/tasks
+GET    /api/v1/tasks
+GET    /api/v1/tasks/{task_id}
+PATCH  /api/v1/tasks/{task_id}
+POST   /api/v1/tasks/{task_id}/change-status
+DELETE /api/v1/tasks/{task_id}
+
+POST /api/v1/activities
+GET  /api/v1/activities
+GET  /api/v1/activities/{activity_id}
+
+POST   /api/v1/notes
+GET    /api/v1/notes
+GET    /api/v1/notes/{note_id}
+PATCH  /api/v1/notes/{note_id}
+DELETE /api/v1/notes/{note_id}
+```
+
+Task lists support status, assignee, and deal filters with bounded offset
+pagination. Notes support company, contact, and deal filters. Activities use
+the cursor described above. Every route derives workspace scope from the
+authenticated backend context rather than request bodies.
+
+## 32. Migration and verification
+
+Migration `20260715_0007_tasks_activities_notes.py` adds all three tables,
+checks, query indexes, user relationships, composite CRM relationships, and
+the deal composite uniqueness required by those foreign keys.
+
+Integration coverage proves:
+
+- completion timestamp and version changes through the task status command;
+- rejection of stale task and note updates;
+- application rejection of a deal from another workspace;
+- PostgreSQL rejection when the application boundary is bypassed;
+- stable multi-page activity cursor behavior;
+- API creation and mutation flows for all three resources;
+- absence of activity update and delete operations in OpenAPI.
+
+The complete suite contains 30 passing tests against PostgreSQL. Ruff, strict
+mypy, and Alembic schema comparison also pass, with no migration drift.
+
+## 33. Why stage changes are commands
+
+Pipeline stages are not independent labels. Their order determines the visual
+sales process, their outcome determines whether a deal is open, won, or lost,
+and active deals may reference them. Generic stage CRUD would make it easy to
+create gaps, duplicate positions, or leave deals pointing at an invalid stage.
+
+The API therefore exposes three explicit operations:
+
+```text
+PATCH /api/v1/pipelines/{pipeline_id}/stages/{stage_id}
+POST  /api/v1/pipelines/{pipeline_id}/reorder-stages
+POST  /api/v1/pipelines/{pipeline_id}/stages/{stage_id}/archive
+```
+
+Metadata updates can change a name, probability, or outcome. A name must remain
+unique among active stages. Probability changes affect future moves into the
+stage but do not silently rewrite manually adjusted probabilities on existing
+deals. An outcome cannot change while active deals use the stage because doing
+so would make their stored status disagree with pipeline semantics.
+
+## 34. Atomic stage reordering
+
+The reorder command requires the complete set of active stage IDs exactly once.
+Partial lists and duplicates are rejected. This makes the intended final order
+unambiguous and prevents a stale client from accidentally omitting a stage.
+
+The command locks the pipeline and its active stages, checks the pipeline
+version, moves every position into a collision-free temporary range, and then
+assigns positions `1..N`. The temporary range is necessary because PostgreSQL
+unique constraints are checked during updates; directly swapping positions 1
+and 2 can otherwise create a transient duplicate.
+
+All affected stage versions and the pipeline version advance atomically. A
+second browser using the old pipeline version receives `409 Conflict`.
+Submitting the existing order is idempotent and does not create versions or
+audit noise.
+
+## 35. Safe stage archival and deal migration
+
+A pipeline must keep at least two active stages. Archival is rejected if it
+would violate this invariant.
+
+If active deals use the stage, the caller must provide
+`replacement_stage_id`. The replacement must be another active stage in the
+same workspace and pipeline. In one transaction the command:
+
+1. locks the pipeline, stages, and affected deals;
+2. validates pipeline and stage versions;
+3. moves each deal to the replacement;
+4. copies replacement probability and derives deal status from its outcome;
+5. increments every moved deal version;
+6. archives the source stage;
+7. compacts remaining positions;
+8. increments the pipeline version;
+9. writes audit records for every business mutation.
+
+Archived stages use `NULL` position. PostgreSQL unique constraints allow
+multiple archived stages with no position while continuing to guarantee unique
+positions for active stages.
+
+## 36. Audit record design
+
+Every company, contact, pipeline, stage, deal, task, activity, and note
+mutation now creates an `audit_records` row in the same database transaction.
+An audit record stores:
+
+- non-null `workspace_id`;
+- actor ID when a human identity exists;
+- source: `human`, `rule`, `ai`, or `system`;
+- action and entity type;
+- entity UUID;
+- JSONB state before and after the change;
+- an authoritative server timestamp.
+
+Audit writes live in application use cases rather than HTTP routes. The same
+history is therefore produced by FastAPI, future workers, imports, rules, and
+AI tools. If audit persistence fails, the surrounding CRM transaction also
+fails.
+
+The snapshots use JSONB because fields vary between entity types and audit
+records are historical evidence rather than live domain objects. The original
+tables remain the authoritative current state.
+
+## 37. Append-only protection and ordering
+
+The API exposes only list and detail operations:
+
+```text
+GET /api/v1/audit-records
+GET /api/v1/audit-records/{record_id}
+```
+
+PostgreSQL additionally installs a trigger that rejects every `UPDATE` or
+`DELETE` against `audit_records`. This protects history when application code
+is bypassed by a script or future worker.
+
+Audit pagination uses `(created_at DESC, id ASC)` and an opaque record cursor.
+The timestamp default is `clock_timestamp()` rather than `now()`. PostgreSQL
+`now()` is fixed for an entire transaction, so multiple business events in one
+command would otherwise receive the same time and lose their true ordering.
+
+Reads are always scoped by the trusted workspace context. A valid audit UUID
+from another workspace behaves as not found.
+
+## 38. Migration and verification
+
+Migration `20260718_0008_stage_commands_audit.py` makes stage position nullable
+for archived stages, creates the JSONB audit table and indexes, and installs
+the append-only database trigger.
+
+The new tests prove:
+
+- complete, atomic stage reordering and stale-version rejection;
+- prevention of outcome changes while active deals use a stage;
+- mandatory replacement for occupied stage archival;
+- atomic deal migration and position compaction;
+- audit creation for aggregate commands;
+- cross-workspace audit isolation;
+- database rejection of audit tampering;
+- FastAPI contracts for stage commands and read-only audit routes.
+
+The complete suite now contains 35 passing tests against PostgreSQL. Ruff,
+strict mypy, and Alembic schema comparison pass with no migration drift.
